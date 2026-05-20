@@ -1,0 +1,38 @@
+{
+  "port": 8787,
+  "providers": {
+    "minimax": {
+      "baseUrl": "https://api.minimax.io/anthropic",
+      "apiKeyEnv": "MINIMAX_API_KEY",
+      "auth": "bearer",
+      "model": "MiniMax-M2.7",
+      "pricing": { "inputPerMtok": 0.3, "outputPerMtok": 1.2 }
+    },
+    "anthropic-haiku": {
+      "baseUrl": "https://api.anthropic.com",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "auth": "x-api-key",
+      "model": "claude-haiku-4-5",
+      "anthropicVersion": "2023-06-01",
+      "pricing": { "inputPerMtok": 1.0, "outputPerMtok": 5.0 }
+    },
+    "anthropic-opus": {
+      "baseUrl": "https://api.anthropic.com",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "auth": "x-api-key",
+      "model": "claude-opus-4-7",
+      "anthropicVersion": "2023-06-01",
+      "pricing": { "inputPerMtok": 15.0, "outputPerMtok": 75.0 }
+    }
+  },
+  "routing": {
+    "tiers": {
+      "background": "anthropic-haiku",
+      "haiku": "anthropic-haiku",
+      "sonnet": "minimax",
+      "opus": "anthropic-opus"
+    },
+    "planModeToOpus": true,
+    "classifier": { "enabled": true, "provider": "anthropic-haiku" }
+  }
+}

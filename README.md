@@ -71,7 +71,9 @@ CI runs `typecheck` and `test` on every push and pull request
 - `providers` — base URL, `format`, API key env var, auth scheme, model id,
   pricing. `auth` may be `bearer`, `x-api-key`, or `none` (keyless, e.g. local
   Ollama).
-- `routing.tiers` — maps each tier to a provider.
+- `routing.tiers` — maps each tier to a provider. The `sonnet` tier ships
+  pointed at `minimax`; change it to `anthropic-sonnet` to run the execution
+  tier on real Sonnet instead.
 - `routing.planModeToOpus` — escalate plan-mode requests to Opus.
 - `routing.classifier` — enable/disable the Haiku escalation classifier.
 - `baselinePricing` — reference rates for the dashboard's savings estimate.

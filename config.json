@@ -19,6 +19,15 @@
       "anthropicVersion": "2023-06-01",
       "pricing": { "inputPerMtok": 1.0, "outputPerMtok": 5.0 }
     },
+    "anthropic-sonnet": {
+      "baseUrl": "https://api.anthropic.com",
+      "format": "anthropic",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "auth": "x-api-key",
+      "model": "claude-sonnet-4-6",
+      "anthropicVersion": "2023-06-01",
+      "pricing": { "inputPerMtok": 3.0, "outputPerMtok": 15.0 }
+    },
     "anthropic-opus": {
       "baseUrl": "https://api.anthropic.com",
       "format": "anthropic",

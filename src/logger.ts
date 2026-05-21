@@ -1,4 +1,4 @@
-import type { ProviderConfig } from "./config";
+import type { Pricing, ProviderConfig } from "./config";
 
 export interface RequestLog {
   method: string;
@@ -14,26 +14,34 @@ export interface RequestLog {
   estCostUsd?: number;
 }
 
+export function costWithPricing(
+  pricing: Pricing | undefined,
+  inputTokens?: number,
+  outputTokens?: number,
+): number | undefined {
+  if (!pricing || inputTokens === undefined || outputTokens === undefined) return undefined;
+  return (
+    (inputTokens / 1_000_000) * pricing.inputPerMtok +
+    (outputTokens / 1_000_000) * pricing.outputPerMtok
+  );
+}
+
 export function estimateCost(
   provider: ProviderConfig | undefined,
   inputTokens?: number,
   outputTokens?: number,
 ): number | undefined {
-  if (!provider?.pricing || inputTokens === undefined || outputTokens === undefined)
-    return undefined;
-  return (
-    (inputTokens / 1_000_000) * provider.pricing.inputPerMtok +
-    (outputTokens / 1_000_000) * provider.pricing.outputPerMtok
-  );
+  return costWithPricing(provider?.pricing, inputTokens, outputTokens);
 }
 
 /** Best-effort token usage extraction from a captured (SSE or JSON) response. */
 export function extractUsage(responseText: string): { input?: number; output?: number } {
-  const input = /"input_tokens":\s*(\d+)/.exec(responseText);
+  const inputs = [...responseText.matchAll(/"input_tokens":\s*(\d+)/g)];
   const outputs = [...responseText.matchAll(/"output_tokens":\s*(\d+)/g)];
+  const lastInput = inputs.at(-1);
   const lastOutput = outputs.at(-1);
   return {
-    input: input ? Number(input[1]) : undefined,
+    input: lastInput ? Number(lastInput[1]) : undefined,
     output: lastOutput ? Number(lastOutput[1]) : undefined,
   };
 }

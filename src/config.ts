@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type AuthScheme = "bearer" | "x-api-key";
+export type AuthScheme = "bearer" | "x-api-key" | "none";
+export type ProviderFormat = "anthropic" | "openai";
 export type Tier = "background" | "haiku" | "sonnet" | "opus";
 
 export interface Pricing {
@@ -12,9 +13,10 @@ export interface Pricing {
 
 export interface ProviderConfig {
   baseUrl: string;
-  apiKeyEnv: string;
   auth: AuthScheme;
   model: string;
+  apiKeyEnv?: string;
+  format?: ProviderFormat;
   anthropicVersion?: string;
   pricing?: Pricing;
 }
@@ -29,6 +31,8 @@ export interface Config {
   port: number;
   providers: Record<string, ProviderConfig>;
   routing: RoutingConfig;
+  /** Reference rates (e.g. Sonnet) used to estimate savings on the dashboard. */
+  baselinePricing?: Pricing;
 }
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,6 +64,10 @@ export function loadConfig(path = resolve(ROOT, "config.json")): Config {
 function validateConfig(config: Config): void {
   if (!config.providers || Object.keys(config.providers).length === 0)
     throw new Error("config: no providers defined");
+  for (const [name, provider] of Object.entries(config.providers)) {
+    if (provider.auth !== "none" && !provider.apiKeyEnv)
+      throw new Error(`config: provider "${name}" needs apiKeyEnv (auth is "${provider.auth}")`);
+  }
   for (const [tier, providerName] of Object.entries(config.routing.tiers)) {
     if (!config.providers[providerName])
       throw new Error(`config: tier "${tier}" points to unknown provider "${providerName}"`);
@@ -70,6 +78,7 @@ function validateConfig(config: Config): void {
 }
 
 export function resolveApiKey(provider: ProviderConfig): string {
+  if (!provider.apiKeyEnv) throw new Error("provider has no apiKeyEnv configured");
   const key = process.env[provider.apiKeyEnv];
   if (!key)
     throw new Error(`missing API key: set ${provider.apiKeyEnv} in the environment or .env`);

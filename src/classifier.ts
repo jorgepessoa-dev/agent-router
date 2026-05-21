@@ -1,5 +1,5 @@
 import type { Config } from "./config";
-import { buildAuthHeaders } from "./providers";
+import { authHeaders } from "./providers";
 import type { ContentBlock, Message, MessagesRequest } from "./types";
 import { createPinCache, isNewUserTurn, turnKey } from "./turn";
 
@@ -63,7 +63,11 @@ async function runClassification(
   try {
     const res = await fetch(`${provider.baseUrl}/v1/messages`, {
       method: "POST",
-      headers: { "content-type": "application/json", ...buildAuthHeaders(provider) },
+      headers: {
+        "content-type": "application/json",
+        "anthropic-version": provider.anthropicVersion ?? "2023-06-01",
+        ...authHeaders(provider),
+      },
       body: JSON.stringify({
         model: provider.model,
         max_tokens: 8,

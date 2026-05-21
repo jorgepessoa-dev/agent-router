@@ -23,18 +23,24 @@ Two layers, no LLM call on the hot path:
    user turn** and the verdict is pinned for that turn's tool round-trips, so
    prompt caching is preserved and Haiku is not called per request.
 
-MiniMax and Anthropic both speak the Anthropic Messages API, so the router is a
-streaming reverse proxy — SSE is passed through untouched, no format
-translation.
+## Provider formats
+
+Each provider has a `format`:
+
+- `anthropic` — speaks the Anthropic Messages API (MiniMax, Anthropic). The
+  router is a pure streaming SSE reverse proxy: no translation.
+- `openai` — speaks the OpenAI Chat Completions API (Ollama, OpenRouter, ...).
+  The router translates request and response (including the streaming SSE
+  event sequence and tool calls) in both directions.
 
 ## Setup
 
 1. Install dev dependencies: `npm install`
 2. Copy `.env.example` to `.env` and fill in `MINIMAX_API_KEY` and
-   `ANTHROPIC_API_KEY`.
-3. Review `config.json` — providers, tier mapping, and **`pricing`** (the
-   per-million-token rates are illustrative; set your real rates so the cost
-   estimates in the logs are accurate).
+   `ANTHROPIC_API_KEY` (and `OPENROUTER_API_KEY` if you route to OpenRouter).
+3. Review `config.json` — providers, tier mapping, and **`pricing`** /
+   **`baselinePricing`** (the per-million-token rates are illustrative; set
+   your real rates so the cost estimates are accurate).
 
 ## Usage
 
@@ -43,18 +49,29 @@ scripts/cc.sh            # starts the router if needed, then launches Claude Cod
 ```
 
 Inside Claude Code, use `/model` as normal (`sonnet` → MiniMax, `opus` → Opus).
-The router logs one line per request: tier, provider, reason, latency, token
-usage, and estimated cost.
+
+## Dashboard
+
+With the router running, open <http://localhost:8787/> for a live cost
+dashboard: per-provider request counts, token usage, spend, and estimated
+savings versus the `baselinePricing` (Sonnet) reference. Raw JSON is at
+`/stats`; `/health` is a plain status check.
 
 ## Commands
 
 - `npm start` — run the router (`http://localhost:8787`)
-- `npm test` — unit tests for the routing logic
+- `npm test` — unit tests (routing logic + OpenAI translation)
 - `npm run typecheck` — TypeScript type-check
+
+CI runs `typecheck` and `test` on every push and pull request
+(`.github/workflows/ci.yml`).
 
 ## Configuration (`config.json`)
 
-- `providers` — base URL, API key env var, auth scheme, model id, pricing.
+- `providers` — base URL, `format`, API key env var, auth scheme, model id,
+  pricing. `auth` may be `bearer`, `x-api-key`, or `none` (keyless, e.g. local
+  Ollama).
 - `routing.tiers` — maps each tier to a provider.
 - `routing.planModeToOpus` — escalate plan-mode requests to Opus.
 - `routing.classifier` — enable/disable the Haiku escalation classifier.
+- `baselinePricing` — reference rates for the dashboard's savings estimate.

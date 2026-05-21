@@ -1,8 +1,10 @@
 {
   "port": 8787,
+  "baselinePricing": { "inputPerMtok": 3.0, "outputPerMtok": 15.0 },
   "providers": {
     "minimax": {
       "baseUrl": "https://api.minimax.io/anthropic",
+      "format": "anthropic",
       "apiKeyEnv": "MINIMAX_API_KEY",
       "auth": "bearer",
       "model": "MiniMax-M2.7",
@@ -10,6 +12,7 @@
     },
     "anthropic-haiku": {
       "baseUrl": "https://api.anthropic.com",
+      "format": "anthropic",
       "apiKeyEnv": "ANTHROPIC_API_KEY",
       "auth": "x-api-key",
       "model": "claude-haiku-4-5",
@@ -18,11 +21,27 @@
     },
     "anthropic-opus": {
       "baseUrl": "https://api.anthropic.com",
+      "format": "anthropic",
       "apiKeyEnv": "ANTHROPIC_API_KEY",
       "auth": "x-api-key",
       "model": "claude-opus-4-7",
       "anthropicVersion": "2023-06-01",
       "pricing": { "inputPerMtok": 15.0, "outputPerMtok": 75.0 }
+    },
+    "openrouter": {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "format": "openai",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "auth": "bearer",
+      "model": "deepseek/deepseek-chat",
+      "pricing": { "inputPerMtok": 0.28, "outputPerMtok": 0.88 }
+    },
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "format": "openai",
+      "auth": "none",
+      "model": "qwen2.5-coder:14b",
+      "pricing": { "inputPerMtok": 0, "outputPerMtok": 0 }
     }
   },
   "routing": {

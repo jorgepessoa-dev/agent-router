@@ -1,9 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { makeClassifier } from "./classifier";
 import type { Config } from "./config";
-import { estimateCost, extractUsage, logRequest } from "./logger";
+import { dashboardHtml } from "./dashboard";
+import { costWithPricing, estimateCost, extractUsage, logRequest } from "./logger";
 import { forward } from "./providers";
 import { decideRoute } from "./router";
+import { recordRequest, snapshot } from "./stats";
 import type { MessagesRequest } from "./types";
 
 const MAX_CAPTURE_BYTES = 200_000;
@@ -41,8 +43,7 @@ export function createRouterServer(config: Config) {
   return createServer((req, res) => {
     handle(req, res, config, classify).catch((err) => {
       console.error("router error:", err);
-      if (!res.headersSent)
-        sendJson(res, 502, errorBody("router_error", String(err)));
+      if (!res.headersSent) sendJson(res, 502, errorBody("router_error", String(err)));
       else res.end();
     });
   });
@@ -54,10 +55,19 @@ async function handle(
   config: Config,
   classify: ReturnType<typeof makeClassifier>,
 ): Promise<void> {
-  const url = req.url ?? "/";
+  const url = (req.url ?? "/").split("?")[0];
 
-  if (req.method === "GET" && (url === "/health" || url === "/")) {
+  if (req.method === "GET" && url === "/") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(dashboardHtml());
+    return;
+  }
+  if (req.method === "GET" && url === "/health") {
     sendJson(res, 200, { status: "ok", providers: Object.keys(config.providers) });
+    return;
+  }
+  if (req.method === "GET" && url === "/stats") {
+    sendJson(res, 200, snapshot());
     return;
   }
 
@@ -78,16 +88,9 @@ async function handle(
 
   const decision = await decideRoute(body, config, { classify });
   const provider = config.providers[decision.providerName];
+  const upstream = await forward(provider, body, lowerHeaders(req));
 
-  const upstream = await forward(
-    provider,
-    body as Record<string, unknown>,
-    lowerHeaders(req),
-  );
-
-  res.writeHead(upstream.status, {
-    "content-type": upstream.headers.get("content-type") ?? "application/json",
-  });
+  res.writeHead(upstream.status, { "content-type": upstream.contentType });
 
   const log = {
     method: "POST",
@@ -102,6 +105,7 @@ async function handle(
   if (!upstream.body) {
     res.end();
     logRequest({ ...log, latencyMs: Date.now() - started });
+    recordRequest({ provider: decision.providerName });
     return;
   }
 
@@ -113,17 +117,24 @@ async function handle(
     const { done, value } = await reader.read();
     if (done) break;
     res.write(value);
-    if (captured.length < MAX_CAPTURE_BYTES)
-      captured += decoder.decode(value, { stream: true });
+    if (captured.length < MAX_CAPTURE_BYTES) captured += decoder.decode(value, { stream: true });
   }
   res.end();
 
   const usage = extractUsage(captured);
+  const cost = estimateCost(provider, usage.input, usage.output);
+  recordRequest({
+    provider: decision.providerName,
+    inputTokens: usage.input,
+    outputTokens: usage.output,
+    costUsd: cost,
+    baselineCostUsd: costWithPricing(config.baselinePricing, usage.input, usage.output),
+  });
   logRequest({
     ...log,
     latencyMs: Date.now() - started,
     inputTokens: usage.input,
     outputTokens: usage.output,
-    estCostUsd: estimateCost(provider, usage.input, usage.output),
+    estCostUsd: cost,
   });
 }

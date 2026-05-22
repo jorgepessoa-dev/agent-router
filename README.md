@@ -1,5 +1,7 @@
 # ClaudeCode_router
 
+> Guia de utilização em português: **[GUIA.md](GUIA.md)**
+
 A transparent router for Claude Code. Claude Code works exactly as usual, but
 requests are routed to cheaper models underneath:
 
@@ -50,7 +52,8 @@ Each provider has a `format`:
 ## Usage
 
 ```sh
-scripts/cc.sh            # starts the router if needed, then launches Claude Code
+scripts/cc.sh            # macOS / Linux / WSL — starts the router, then launches Claude Code
+scripts\cc.ps1           # Windows (PowerShell) — native-Windows equivalent
 ```
 
 Inside Claude Code, use `/model` as normal — every tier routes to MiniMax.

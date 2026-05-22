@@ -2,8 +2,9 @@
 
 > Guia de utilização em português: **[GUIA.md](GUIA.md)**
 
-A transparent router for Claude Code. Claude Code works exactly as usual, but
-requests are routed to cheaper models underneath:
+A transparent router for Claude Code and the Codex CLI. Both agents work
+exactly as usual; their requests are routed to a cheaper model (MiniMax-M2.7)
+underneath:
 
 | Tier (from Claude Code)        | Routed to        | Role                              |
 | ------------------------------ | ---------------- | --------------------------------- |

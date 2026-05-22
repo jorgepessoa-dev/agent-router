@@ -23,7 +23,7 @@ export function authHeaders(provider: ProviderConfig): Record<string, string> {
     : { "x-api-key": key };
 }
 
-function stringStream(text: string): ReadableStream<Uint8Array> {
+export function stringStream(text: string): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(new TextEncoder().encode(text));

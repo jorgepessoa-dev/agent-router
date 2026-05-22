@@ -42,7 +42,7 @@ function toolResultText(block: ContentBlock): string {
   return "";
 }
 
-function safeParse(raw: string): unknown {
+export function safeParse(raw: string): unknown {
   try {
     return JSON.parse(raw || "{}");
   } catch {

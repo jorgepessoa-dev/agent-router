@@ -3,13 +3,14 @@ import { makeClassifier } from "./classifier";
 import type { Config } from "./config";
 import { dashboardHtml } from "./dashboard";
 import { costWithPricing, estimateCost, extractUsage, logRequest } from "./logger";
-import { forward } from "./providers";
+import { forward, stringStream } from "./providers";
 import { decideRoute } from "./router";
 import { recordRequest, snapshot } from "./stats";
 import {
   anthropicResponseToOpenAI,
   anthropicStreamToOpenAI,
   openaiRequestToAnthropic,
+  safeParse,
 } from "./translate";
 import type { MessagesRequest } from "./types";
 
@@ -52,24 +53,6 @@ async function readStream(stream: ReadableStream<Uint8Array>): Promise<string> {
     out += decoder.decode(value, { stream: true });
   }
   return out;
-}
-
-function streamFromString(text: string): ReadableStream<Uint8Array> {
-  const bytes = new TextEncoder().encode(text);
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(bytes);
-      controller.close();
-    },
-  });
-}
-
-function safeJson(text: string): Record<string, unknown> {
-  try {
-    return JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
 }
 
 export function createRouterServer(config: Config) {
@@ -153,8 +136,11 @@ async function handle(
       outContentType = "text/event-stream; charset=utf-8";
     } else {
       const anthropicText = await readStream(upstream.body);
-      const translated = anthropicResponseToOpenAI(safeJson(anthropicText), body.model);
-      outBody = streamFromString(JSON.stringify(translated));
+      const translated = anthropicResponseToOpenAI(
+        safeParse(anthropicText) as Record<string, unknown>,
+        body.model,
+      );
+      outBody = stringStream(JSON.stringify(translated));
       outContentType = "application/json";
     }
   }

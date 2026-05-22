@@ -3,22 +3,29 @@
 Guia prático, em português. Para detalhes técnicos (arquitectura, formatos de
 provider, configuração avançada), ver `README.md`.
 
-## O que isto é, em duas frases
+## Como funciona
 
-O router é um intermediário que corre no teu computador. Quando lanças o Claude
-Code **através dele**, os pedidos passam a ir para o **MiniMax** (modelo mais
-barato) em vez dos modelos da Anthropic — e o Claude Code continua a funcionar
-exactamente igual, sem dares por nada.
+O router é um intermediário que corre no teu computador. Tens **duas formas de
+trabalhar** e escolhes uma ao escrever o **comando de arranque** — não se
+misturam a meio de uma sessão.
+
+**Modo barato — MiniMax.** Arrancas com `ccrouter` (o atalho que defines na
+secção 1). Abre o Claude Code ligado ao router; tudo nessa sessão vai para o
+**MiniMax**, um modelo muito mais barato. Para trabalho de volume: código
+rotineiro, edições repetitivas, debugging, tarefas longas.
+
+**Modo caro — subscrição.** Arrancas com `claude` (normal). É o Claude Code de
+sempre, com os modelos Claude reais; o `/model` escolhe Haiku / Sonnet / Opus.
+Para raciocínio difícil, arquitectura, orquestração. Pago pela tua subscrição.
+
+**Regra de ouro:** barato vs caro decide-se no **arranque**, nunca com `/model`
+a meio. Numa sessão `ccrouter` o `/model` é cosmético — vai tudo para o MiniMax;
+para os modelos caros, arrancas com `claude`.
 
 ## 1. Como se usa
 
-Há **dois comandos** para arrancar o Claude Code. O comando que escolhes decide
-tudo:
-
-| Comando | O que acontece | Quem paga |
-|---|---|---|
-| `claude` | Claude Code normal, modelos Claude reais | subscrição Claude Pro |
-| `scripts/cc.sh` | Claude Code com routing — tudo vai para MiniMax | créditos MiniMax |
+Esta secção é o lado prático do **Modo barato** (arrancar com o router). Para o
+**Modo caro**, arrancas o `claude` como sempre — sem nada disto.
 
 **Atalho (define uma vez):** para não escreveres o caminho todo, cria um alias
 no teu `~/.bashrc` — ajusta o caminho para onde clonaste o repositório:

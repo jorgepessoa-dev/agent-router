@@ -32,4 +32,10 @@ export ANTHROPIC_SMALL_FAST_MODEL="route-background"
 export API_TIMEOUT_MS="3000000"
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
 
+echo
+echo "[agent-router] routed -> MiniMax-M2.7 (cheap mode)"
+echo "[agent-router] Claude Code self-reports Claude tier names; the actual model is MiniMax."
+echo "[agent-router] dashboard: ${ROUTER_URL}/"
+echo
+
 exec claude "$@"

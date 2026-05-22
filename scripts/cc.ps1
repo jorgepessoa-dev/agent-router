@@ -44,4 +44,10 @@ $env:ANTHROPIC_SMALL_FAST_MODEL = "route-background"
 $env:API_TIMEOUT_MS = "3000000"
 $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
 
+Write-Host ""
+Write-Host "[agent-router] routed -> MiniMax-M2.7 (cheap mode)"
+Write-Host "[agent-router] Claude Code self-reports Claude tier names; the actual model is MiniMax."
+Write-Host "[agent-router] dashboard: $RouterUrl/"
+Write-Host ""
+
 & claude @args

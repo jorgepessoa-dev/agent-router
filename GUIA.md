@@ -145,6 +145,41 @@ linha:
 A página actualiza-se sozinha. É a forma de não seres surpreendido pela
 factura.
 
+## Saber qual o modelo está mesmo a responder
+
+O Claude Code não sabe que está a ser redireccionado — reporta o tier que ELE
+acha que está a usar (e mostra o nome Claude correspondente). Numa sessão
+routed isso é só o **label**; o pedido vai mesmo para o MiniMax. Para
+confirmares a realidade tens três formas:
+
+**1. Banner de arranque.** O `cc.sh` / `cc.ps1` imprime, antes de lançar o
+Claude Code:
+
+```
+[agent-router] routed -> MiniMax-M2.7 (cheap mode)
+[agent-router] Claude Code self-reports Claude tier names; the actual model is MiniMax.
+```
+
+Visível ao iniciar a sessão.
+
+**2. Statusline sempre visível** *(opcional)*. Edita `~/.claude/settings.json`
+e acrescenta:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/caminho/para/agent-router/scripts/statusline.sh"
+  }
+}
+```
+
+O statusline mostra `router -> MiniMax-M2.7 (cheap)` em sessão routed, ou
+`Claude (direct)` no modo normal — sempre à vista no rodapé do Claude Code.
+
+**3. Dashboard ao vivo.** `http://localhost:8787/` mostra os pedidos em tempo
+real, com o provider real (`minimax`) e o custo acumulado.
+
 ## Usar com o Codex CLI
 
 O router também serve o **Codex CLI** (o agente da OpenAI), não só o Claude

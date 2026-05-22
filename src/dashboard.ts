@@ -5,7 +5,7 @@ export function dashboardHtml(): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ClaudeCode_router</title>
+<title>agent-router</title>
 <style>
   body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 2rem;
          background: #0f1115; color: #e6e6e6; }
@@ -24,7 +24,7 @@ export function dashboardHtml(): string {
 </style>
 </head>
 <body>
-<h1>ClaudeCode_router &mdash; cost dashboard</h1>
+<h1>agent-router &mdash; cost dashboard</h1>
 <div class="cards">
   <div class="card"><div class="label">Requests</div><div class="value" id="reqs">-</div></div>
   <div class="card"><div class="label">Spent</div><div class="value" id="cost">-</div></div>

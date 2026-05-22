@@ -1,4 +1,4 @@
-# ClaudeCode_router
+# agent-router
 
 > Guia de utilização em português: **[GUIA.md](GUIA.md)**
 

@@ -1,4 +1,4 @@
-# Guia de utilização — ClaudeCode_router
+# Guia de utilização — agent-router
 
 Guia prático, em português. Para detalhes técnicos (arquitectura, formatos de
 provider, configuração avançada), ver `README.md`.
@@ -31,7 +31,7 @@ Esta secção é o lado prático do **Modo barato** (arrancar com o router). Par
 no teu `~/.bashrc` — ajusta o caminho para onde clonaste o repositório:
 
 ```sh
-alias ccrouter='/caminho/para/ClaudeCode_router/scripts/cc.sh'
+alias ccrouter='/caminho/para/agent-router/scripts/cc.sh'
 ```
 
 A partir daí lanças o router com um comando só:
@@ -62,7 +62,7 @@ não a todos os projectos de uma vez.
 - Corres `cc.sh` a partir da pasta de um projecto qualquer → essa sessão fica
   routed, para esse projecto.
 - Funciona com **qualquer** projecto — o router não é específico do
-  `ClaudeCode_router`. Basta lançar `cc.sh` a partir da pasta onde queres
+  `agent-router`. Basta lançar `cc.sh` a partir da pasta onde queres
   trabalhar.
 - Uma sessão aberta com `claude` normal **nunca** é routed.
 
@@ -158,7 +158,7 @@ model_provider = "ccrouter"
 model = "route-sonnet"
 
 [model_providers.ccrouter]
-name = "ClaudeCode_router"
+name = "agent-router"
 base_url = "http://localhost:8787/v1"
 wire_api = "chat"
 env_key = "CCROUTER_KEY"
@@ -197,6 +197,6 @@ um endereço próprio via `ANTHROPIC_BASE_URL`.
 
 ## Pré-requisitos
 
-- `MINIMAX_API_KEY` definida no ficheiro `.env`, na raiz do `ClaudeCode_router`.
+- `MINIMAX_API_KEY` definida no ficheiro `.env`, na raiz do `agent-router`.
 - Node.js versão 20 ou superior.
 - Saldo na conta MiniMax (acompanha o gasto no dashboard).

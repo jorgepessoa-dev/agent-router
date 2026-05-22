@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Transparent router for Claude Code: routes requests across MiniMax, Haiku and Opus.",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",

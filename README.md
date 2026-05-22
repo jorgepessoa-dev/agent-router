@@ -5,9 +5,13 @@ requests are routed to cheaper models underneath:
 
 | Tier (from Claude Code)        | Routed to        | Role                              |
 | ------------------------------ | ---------------- | --------------------------------- |
-| background / small-fast model  | **Haiku**        | trivial internal tasks            |
+| background / haiku             | **MiniMax-M2.7** | trivial / light tasks             |
 | sonnet (default execution)     | **MiniMax-M2.7** | reasoning + code (the real work)  |
-| opus / plan mode / "complex"   | **Opus**         | orchestration / deep reasoning    |
+| opus / plan mode               | **MiniMax-M2.7** | deep reasoning                    |
+
+The shipped `config.json` routes **every tier to MiniMax**, so no Anthropic API
+key is needed. Repoint individual tiers in `routing.tiers` to use other
+providers — e.g. set `opus` to `anthropic-opus` for real Opus on hard turns.
 
 ## How routing works
 
@@ -18,10 +22,11 @@ Two layers, no LLM call on the hot path:
    `route-*` sentinels by `scripts/cc.sh`). The router reads the request's
    `model` field and maps it to a provider. Plan mode (detected via the
    `ExitPlanMode` tool) escalates to Opus.
-2. **Classifier** — for the `sonnet` execution tier, a Haiku call decides
-   `simple` vs `complex` to escalate hard turns to Opus. It runs **once per
-   user turn** and the verdict is pinned for that turn's tool round-trips, so
-   prompt caching is preserved and Haiku is not called per request.
+2. **Classifier** *(optional — disabled in the shipped config)* — for the
+   `sonnet` execution tier, a Haiku call can decide `simple` vs `complex` to
+   escalate hard turns to Opus. It runs **once per user turn** and the verdict
+   is pinned for that turn's tool round-trips, so prompt caching is preserved
+   and Haiku is not called per request.
 
 ## Provider formats
 
@@ -48,7 +53,7 @@ Each provider has a `format`:
 scripts/cc.sh            # starts the router if needed, then launches Claude Code
 ```
 
-Inside Claude Code, use `/model` as normal (`sonnet` → MiniMax, `opus` → Opus).
+Inside Claude Code, use `/model` as normal — every tier routes to MiniMax.
 
 ## Dashboard
 
@@ -71,9 +76,10 @@ CI runs `typecheck` and `test` on every push and pull request
 - `providers` — base URL, `format`, API key env var, auth scheme, model id,
   pricing. `auth` may be `bearer`, `x-api-key`, or `none` (keyless, e.g. local
   Ollama).
-- `routing.tiers` — maps each tier to a provider. The `sonnet` tier ships
-  pointed at `minimax`; change it to `anthropic-sonnet` to run the execution
-  tier on real Sonnet instead.
-- `routing.planModeToOpus` — escalate plan-mode requests to Opus.
-- `routing.classifier` — enable/disable the Haiku escalation classifier.
+- `routing.tiers` — maps each tier to a provider. Every tier ships pointed at
+  `minimax`; repoint a tier (e.g. `opus` to `anthropic-opus`) to use another
+  provider.
+- `routing.planModeToOpus` — escalate plan-mode requests to the `opus` tier.
+- `routing.classifier` — enable/disable the Haiku escalation classifier
+  (disabled in the shipped config).
 - `baselinePricing` — reference rates for the dashboard's savings estimate.

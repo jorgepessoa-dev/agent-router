@@ -55,12 +55,12 @@
   },
   "routing": {
     "tiers": {
-      "background": "anthropic-haiku",
-      "haiku": "anthropic-haiku",
+      "background": "minimax",
+      "haiku": "minimax",
       "sonnet": "minimax",
-      "opus": "anthropic-opus"
+      "opus": "minimax"
     },
-    "planModeToOpus": true,
-    "classifier": { "enabled": true, "provider": "anthropic-haiku" }
+    "planModeToOpus": false,
+    "classifier": { "enabled": false, "provider": "anthropic-haiku" }
   }
 }

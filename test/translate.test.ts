@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  anthropicResponseToOpenAI,
+  anthropicStreamToOpenAI,
   anthropicToOpenAI,
+  openaiRequestToAnthropic,
   openaiResponseToAnthropic,
   openaiStreamToAnthropic,
 } from "../src/translate";
@@ -141,4 +144,141 @@ test("openaiStreamToAnthropic streams tool calls as input_json_delta", async () 
   assert.ok(text.includes('"name":"Read"'));
   assert.ok(text.includes('"type":"input_json_delta"'));
   assert.ok(text.includes('"stop_reason":"tool_use"'));
+});
+
+test("openaiRequestToAnthropic maps system, messages and tools", () => {
+  const out = openaiRequestToAnthropic({
+    model: "route-sonnet",
+    stream: true,
+    messages: [
+      { role: "system", content: "be helpful" },
+      { role: "user", content: "hi" },
+      {
+        role: "assistant",
+        content: "calling",
+        tool_calls: [
+          { id: "t1", type: "function", function: { name: "Read", arguments: '{"path":"a"}' } },
+        ],
+      },
+      { role: "tool", tool_call_id: "t1", content: "file contents" },
+    ],
+    tools: [
+      {
+        type: "function",
+        function: { name: "Read", description: "read", parameters: { type: "object" } },
+      },
+    ],
+  });
+
+  assert.equal(out.model, "route-sonnet");
+  assert.equal(out.stream, true);
+  assert.equal(out.system, "be helpful");
+  assert.equal(out.messages[0].role, "user");
+  assert.equal(out.messages[1].role, "assistant");
+  const assistant = out.messages[1].content as Record<string, unknown>[];
+  assert.equal(assistant[0].type, "text");
+  assert.equal(assistant[1].type, "tool_use");
+  assert.equal(assistant[1].name, "Read");
+  assert.equal(out.messages[2].role, "user");
+  const toolResult = out.messages[2].content as Record<string, unknown>[];
+  assert.equal(toolResult[0].type, "tool_result");
+  assert.equal(toolResult[0].tool_use_id, "t1");
+  assert.equal(out.tools?.[0].name, "Read");
+  assert.equal((out.tools?.[0] as Record<string, any>).input_schema.type, "object");
+});
+
+test("anthropicResponseToOpenAI maps content, tool calls and usage", () => {
+  const out = anthropicResponseToOpenAI(
+    {
+      id: "msg_1",
+      content: [
+        { type: "text", text: "done" },
+        { type: "tool_use", id: "t1", name: "Read", input: { path: "a" } },
+      ],
+      stop_reason: "tool_use",
+      usage: { input_tokens: 12, output_tokens: 5 },
+    },
+    "route-sonnet",
+  ) as Record<string, any>;
+
+  assert.equal(out.object, "chat.completion");
+  assert.equal(out.choices[0].message.content, "done");
+  assert.equal(out.choices[0].message.tool_calls[0].function.name, "Read");
+  assert.equal(out.choices[0].message.tool_calls[0].function.arguments, '{"path":"a"}');
+  assert.equal(out.choices[0].finish_reason, "tool_calls");
+  assert.equal(out.usage.prompt_tokens, 12);
+  assert.equal(out.usage.completion_tokens, 5);
+  assert.equal(out.usage.total_tokens, 17);
+});
+
+test("anthropicStreamToOpenAI emits a valid OpenAI chunk sequence", async () => {
+  const events =
+    [
+      'data: {"type":"message_start","message":{"usage":{"input_tokens":9,"output_tokens":0}}}',
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hel"}}',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"lo"}}',
+      'data: {"type":"content_block_stop","index":0}',
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}',
+      'data: {"type":"message_stop"}',
+    ].join("\n\n") + "\n\n";
+
+  const source = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(events));
+      controller.close();
+    },
+  });
+
+  const out = anthropicStreamToOpenAI(source, "route-sonnet");
+  const reader = out.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value);
+  }
+
+  assert.ok(text.includes('"chat.completion.chunk"'));
+  assert.ok(text.includes('"role":"assistant"'));
+  assert.ok(text.includes('"content":"Hel"'));
+  assert.ok(text.includes('"content":"lo"'));
+  assert.ok(text.includes('"finish_reason":"stop"'));
+  assert.ok(text.includes('"completion_tokens":2'));
+  assert.ok(text.includes("data: [DONE]"));
+});
+
+test("anthropicStreamToOpenAI streams tool calls", async () => {
+  const events =
+    [
+      'data: {"type":"message_start","message":{"usage":{"input_tokens":4}}}',
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"Read"}}',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"path\\":"}}',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\\"a.ts\\"}"}}',
+      'data: {"type":"content_block_stop","index":0}',
+      'data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":8}}',
+      'data: {"type":"message_stop"}',
+    ].join("\n\n") + "\n\n";
+
+  const source = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(events));
+      controller.close();
+    },
+  });
+
+  const out = anthropicStreamToOpenAI(source, "m");
+  const reader = out.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value);
+  }
+
+  assert.ok(text.includes('"tool_calls"'));
+  assert.ok(text.includes('"name":"Read"'));
+  assert.ok(text.includes('"finish_reason":"tool_calls"'));
 });

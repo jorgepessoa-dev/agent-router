@@ -20,10 +20,17 @@ tudo:
 | `claude` | Claude Code normal, modelos Claude reais | subscrição Claude Pro |
 | `scripts/cc.sh` | Claude Code com routing — tudo vai para MiniMax | créditos MiniMax |
 
-Para usar o router:
+**Atalho (define uma vez):** para não escreveres o caminho todo, cria um alias
+no teu `~/.bashrc` — ajusta o caminho para onde clonaste o repositório:
 
 ```sh
-~/projects/ClaudeCode_router/scripts/cc.sh
+alias ccrouter='/caminho/para/ClaudeCode_router/scripts/cc.sh'
+```
+
+A partir daí lanças o router com um comando só:
+
+```sh
+ccrouter
 ```
 
 Isto arranca o router (se ainda não estiver a correr) e abre o Claude Code já
@@ -32,10 +39,7 @@ ligado a ele. A partir daí usas o Claude Code como sempre.
 **Exemplo passo-a-passo:**
 
 1. Abre um terminal.
-2. Corre o lançador:
-   ```sh
-   ~/projects/ClaudeCode_router/scripts/cc.sh
-   ```
+2. Corre o lançador: `ccrouter`
 3. Na 1ª vez vês `[cc] starting router on http://localhost:8787 ...` — é o
    router a arrancar. Nas vezes seguintes já está a correr e nem isso aparece.
 4. O Claude Code abre normalmente. Trabalhas como sempre; as respostas passam
@@ -62,7 +66,7 @@ Ou seja: é opt-in, sessão a sessão. Sempre que queres MiniMax, arrancas com
 
 ```sh
 cd ~/projects/outro-projecto
-~/projects/ClaudeCode_router/scripts/cc.sh
+ccrouter
 ```
 
 O Claude Code abre na pasta do `outro-projecto`, já routed para o MiniMax.
@@ -128,6 +132,34 @@ linha:
 
 A página actualiza-se sozinha. É a forma de não seres surpreendido pela
 factura.
+
+## Usar com o Codex CLI
+
+O router também serve o **Codex CLI** (o agente da OpenAI), não só o Claude
+Code. O Codex fala a API da OpenAI; o router expõe um endpoint compatível em
+`POST /v1/chat/completions` e traduz para MiniMax por baixo.
+
+Configura o Codex em `~/.codex/config.toml`:
+
+```toml
+model_provider = "ccrouter"
+model = "route-sonnet"
+
+[model_providers.ccrouter]
+name = "ClaudeCode_router"
+base_url = "http://localhost:8787/v1"
+wire_api = "chat"
+env_key = "CCROUTER_KEY"
+```
+
+- `wire_api = "chat"` — usa a API Chat Completions, que é a que o router expõe.
+- `env_key` — o router não valida a chave, mas o Codex exige a variável.
+  Define-a com qualquer valor: `export CCROUTER_KEY=local`.
+- `model` — `route-sonnet` encaminha para o MiniMax; qualquer nome desconhecido
+  também cai no MiniMax por omissão.
+
+O router tem de estar a correr (`ccrouter`, ou `scripts/cc.sh` /
+`scripts\cc.ps1`). Funciona em WSL e em Windows.
 
 ## Plataformas
 

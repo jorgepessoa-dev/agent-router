@@ -6,6 +6,11 @@ import { costWithPricing, estimateCost, extractUsage, logRequest } from "./logge
 import { forward } from "./providers";
 import { decideRoute } from "./router";
 import { recordRequest, snapshot } from "./stats";
+import {
+  anthropicResponseToOpenAI,
+  anthropicStreamToOpenAI,
+  openaiRequestToAnthropic,
+} from "./translate";
 import type { MessagesRequest } from "./types";
 
 const MAX_CAPTURE_BYTES = 200_000;
@@ -35,6 +40,36 @@ function lowerHeaders(req: IncomingMessage): Record<string, string> {
     else if (Array.isArray(value)) out[key.toLowerCase()] = value.join(", ");
   }
   return out;
+}
+
+async function readStream(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const decoder = new TextDecoder();
+  const reader = stream.getReader();
+  let out = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    out += decoder.decode(value, { stream: true });
+  }
+  return out;
+}
+
+function streamFromString(text: string): ReadableStream<Uint8Array> {
+  const bytes = new TextEncoder().encode(text);
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
+
+function safeJson(text: string): Record<string, unknown> {
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 export function createRouterServer(config: Config) {
@@ -71,30 +106,36 @@ async function handle(
     return;
   }
 
-  if (req.method !== "POST" || !url.startsWith("/v1/messages")) {
+  const isMessages = req.method === "POST" && url.startsWith("/v1/messages");
+  const isChat = req.method === "POST" && url.startsWith("/v1/chat/completions");
+  if (!isMessages && !isChat) {
     sendJson(res, 404, errorBody("not_found", `no route for ${req.method} ${url}`));
     return;
   }
 
   const started = Date.now();
   const raw = await readBody(req);
-  let body: MessagesRequest;
+  let parsed: unknown;
   try {
-    body = JSON.parse(raw) as MessagesRequest;
+    parsed = JSON.parse(raw);
   } catch {
     sendJson(res, 400, errorBody("invalid_request_error", "request body is not valid JSON"));
     return;
   }
 
+  // OpenAI clients (e.g. the Codex CLI) hit /v1/chat/completions; their request
+  // is translated into the Anthropic shape the router works in.
+  const body: MessagesRequest = isChat
+    ? openaiRequestToAnthropic(parsed)
+    : (parsed as MessagesRequest);
+
   const decision = await decideRoute(body, config, { classify });
   const provider = config.providers[decision.providerName];
   const upstream = await forward(provider, body, lowerHeaders(req));
 
-  res.writeHead(upstream.status, { "content-type": upstream.contentType });
-
   const log = {
     method: "POST",
-    path: "/v1/messages",
+    path: isChat ? "/v1/chat/completions" : "/v1/messages",
     tier: decision.tier,
     provider: decision.providerName,
     model: provider.model,
@@ -102,17 +143,35 @@ async function handle(
     status: upstream.status,
   };
 
-  if (!upstream.body) {
+  // For OpenAI clients the Anthropic-format upstream is translated back to
+  // OpenAI; error responses (status >= 400) pass through untranslated.
+  let outBody = upstream.body;
+  let outContentType = upstream.contentType;
+  if (isChat && upstream.body && upstream.status < 400) {
+    if (body.stream) {
+      outBody = anthropicStreamToOpenAI(upstream.body, body.model);
+      outContentType = "text/event-stream; charset=utf-8";
+    } else {
+      const anthropicText = await readStream(upstream.body);
+      const translated = anthropicResponseToOpenAI(safeJson(anthropicText), body.model);
+      outBody = streamFromString(JSON.stringify(translated));
+      outContentType = "application/json";
+    }
+  }
+
+  res.writeHead(upstream.status, { "content-type": outContentType });
+
+  if (!outBody) {
     res.end();
     logRequest({ ...log, latencyMs: Date.now() - started });
     recordRequest({ provider: decision.providerName });
     return;
   }
 
-  // Stream upstream -> client, tapping the bytes to extract token usage.
+  // Stream the response -> client, tapping the bytes to extract token usage.
   let captured = "";
   const decoder = new TextDecoder();
-  const reader = upstream.body.getReader();
+  const reader = outBody.getReader();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;

@@ -342,3 +342,316 @@ export function openaiStreamToAnthropic(
     },
   });
 }
+
+/* ── Inbound: OpenAI Chat Completions clients -> Anthropic and back ────────
+ * Mirror of the functions above, for OpenAI-format clients (e.g. the Codex
+ * CLI) that point at the router's POST /v1/chat/completions endpoint.
+ */
+
+interface OpenAIChatRequest {
+  model?: string;
+  messages?: Record<string, unknown>[];
+  tools?: Record<string, any>[];
+  max_tokens?: number;
+  max_completion_tokens?: number;
+  stream?: boolean;
+}
+
+const DEFAULT_MAX_TOKENS = 4096;
+
+function mapStopReasonToOpenAI(stop: string | null | undefined): string {
+  switch (stop) {
+    case "max_tokens":
+      return "length";
+    case "tool_use":
+      return "tool_calls";
+    default:
+      return "stop";
+  }
+}
+
+/** Flattens OpenAI message content (string or content-part array) to text. */
+function openaiContentToText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content))
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        const text = (part as Record<string, unknown> | null)?.text;
+        return typeof text === "string" ? text : "";
+      })
+      .join("");
+  return "";
+}
+
+/** Translates an OpenAI Chat Completions request into an Anthropic request. */
+export function openaiRequestToAnthropic(raw: unknown): MessagesRequest {
+  const body = (raw ?? {}) as OpenAIChatRequest;
+  const systemParts: string[] = [];
+  const messages: { role: "user" | "assistant"; content: ContentBlock[] }[] = [];
+
+  const pushBlock = (role: "user" | "assistant", block: ContentBlock) => {
+    const last = messages[messages.length - 1];
+    if (last && last.role === role) last.content.push(block);
+    else messages.push({ role, content: [block] });
+  };
+
+  for (const message of body.messages ?? []) {
+    const role = message.role;
+    const content = message.content;
+
+    if (role === "system" || role === "developer") {
+      const text = openaiContentToText(content);
+      if (text) systemParts.push(text);
+    } else if (role === "tool") {
+      pushBlock("user", {
+        type: "tool_result",
+        tool_use_id: String(message.tool_call_id ?? ""),
+        content: openaiContentToText(content),
+      });
+    } else if (role === "assistant") {
+      const text = openaiContentToText(content);
+      if (text) pushBlock("assistant", { type: "text", text });
+      const calls = (message.tool_calls as Record<string, any>[] | undefined) ?? [];
+      for (const call of calls) {
+        pushBlock("assistant", {
+          type: "tool_use",
+          id: String(call.id ?? ""),
+          name: String(call.function?.name ?? ""),
+          input: safeParse(call.function?.arguments ?? "{}"),
+        });
+      }
+    } else {
+      const text = openaiContentToText(content);
+      if (text) pushBlock("user", { type: "text", text });
+    }
+  }
+
+  const out: MessagesRequest = {
+    model: String(body.model ?? "route-sonnet"),
+    messages,
+    stream: body.stream === true,
+    max_tokens: body.max_tokens ?? body.max_completion_tokens ?? DEFAULT_MAX_TOKENS,
+  };
+  if (systemParts.length) out.system = systemParts.join("\n\n");
+
+  if (Array.isArray(body.tools) && body.tools.length) {
+    out.tools = body.tools
+      .filter((tool) => typeof tool.function?.name === "string")
+      .map((tool) => ({
+        name: tool.function.name as string,
+        description: tool.function.description ?? "",
+        input_schema: tool.function.parameters ?? { type: "object" },
+      }));
+  }
+  return out;
+}
+
+/** Translates a non-streaming Anthropic response into an OpenAI response. */
+export function anthropicResponseToOpenAI(
+  data: Record<string, unknown>,
+  model: string,
+): Record<string, unknown> {
+  const blocks = (data.content as ContentBlock[] | undefined) ?? [];
+  const usage =
+    (data.usage as { input_tokens?: number; output_tokens?: number } | undefined) ?? {};
+
+  let text = "";
+  const toolCalls: OpenAIToolCall[] = [];
+  for (const block of blocks) {
+    if (block.type === "text" && typeof block.text === "string") {
+      text += block.text;
+    } else if (block.type === "tool_use") {
+      toolCalls.push({
+        id: String(block.id ?? ""),
+        type: "function",
+        function: {
+          name: String(block.name ?? ""),
+          arguments: JSON.stringify(block.input ?? {}),
+        },
+      });
+    }
+  }
+
+  const message: Record<string, unknown> = { role: "assistant", content: text || null };
+  if (toolCalls.length) message.tool_calls = toolCalls;
+
+  const inputTokens = usage.input_tokens ?? 0;
+  const outputTokens = usage.output_tokens ?? 0;
+
+  return {
+    id: String(data.id ?? `chatcmpl-${Date.now()}`),
+    object: "chat.completion",
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [
+      {
+        index: 0,
+        message,
+        finish_reason: mapStopReasonToOpenAI(data.stop_reason as string | null | undefined),
+      },
+    ],
+    usage: {
+      prompt_tokens: inputTokens,
+      completion_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+    },
+  };
+}
+
+/**
+ * Translates an Anthropic Messages SSE stream into an OpenAI Chat Completions
+ * SSE stream. Inverse of openaiStreamToAnthropic(): Anthropic content blocks
+ * become OpenAI text/tool_call deltas; ends with a usage chunk and [DONE].
+ */
+export function anthropicStreamToOpenAI(
+  upstream: ReadableStream<Uint8Array>,
+  model: string,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const id = `chatcmpl-${Date.now()}`;
+  const created = Math.floor(Date.now() / 1000);
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const emit = (payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+      };
+      const sendChoice = (delta: Record<string, unknown>, finishReason: string | null) => {
+        emit({
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{ index: 0, delta, finish_reason: finishReason }],
+        });
+      };
+
+      const blockKind = new Map<number, "text" | "tool" | "ignore">();
+      const toolIndexOf = new Map<number, number>();
+      let nextToolIndex = 0;
+      let roleSent = false;
+      let stopReason: string | null = null;
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let finished = false;
+
+      const ensureRole = () => {
+        if (roleSent) return;
+        sendChoice({ role: "assistant" }, null);
+        roleSent = true;
+      };
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        ensureRole();
+        sendChoice({}, mapStopReasonToOpenAI(stopReason));
+        emit({
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [],
+          usage: {
+            prompt_tokens: inputTokens,
+            completion_tokens: outputTokens,
+            total_tokens: inputTokens + outputTokens,
+          },
+        });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      };
+
+      const reader = upstream.getReader();
+      let buffer = "";
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const payload = trimmed.slice(5).trim();
+            if (!payload || payload === "[DONE]") continue;
+
+            let ev: Record<string, any>;
+            try {
+              ev = JSON.parse(payload);
+            } catch {
+              continue;
+            }
+
+            if (ev.type === "message_start") {
+              inputTokens = ev.message?.usage?.input_tokens ?? 0;
+              ensureRole();
+            } else if (ev.type === "content_block_start") {
+              const index: number = ev.index ?? 0;
+              const cb = ev.content_block ?? {};
+              if (cb.type === "text") {
+                blockKind.set(index, "text");
+              } else if (cb.type === "tool_use") {
+                blockKind.set(index, "tool");
+                const toolIndex = nextToolIndex++;
+                toolIndexOf.set(index, toolIndex);
+                ensureRole();
+                sendChoice(
+                  {
+                    tool_calls: [
+                      {
+                        index: toolIndex,
+                        id: cb.id ?? `call_${toolIndex}`,
+                        type: "function",
+                        function: { name: cb.name ?? "", arguments: "" },
+                      },
+                    ],
+                  },
+                  null,
+                );
+              } else {
+                blockKind.set(index, "ignore");
+              }
+            } else if (ev.type === "content_block_delta") {
+              const index: number = ev.index ?? 0;
+              const kind = blockKind.get(index);
+              const delta = ev.delta ?? {};
+              if (kind === "text" && delta.type === "text_delta" && typeof delta.text === "string") {
+                ensureRole();
+                sendChoice({ content: delta.text }, null);
+              } else if (
+                kind === "tool" &&
+                delta.type === "input_json_delta" &&
+                typeof delta.partial_json === "string"
+              ) {
+                sendChoice(
+                  {
+                    tool_calls: [
+                      {
+                        index: toolIndexOf.get(index) ?? 0,
+                        function: { arguments: delta.partial_json },
+                      },
+                    ],
+                  },
+                  null,
+                );
+              }
+            } else if (ev.type === "message_delta") {
+              if (ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
+              if (typeof ev.usage?.output_tokens === "number") outputTokens = ev.usage.output_tokens;
+              if (typeof ev.usage?.input_tokens === "number") inputTokens = ev.usage.input_tokens;
+            } else if (ev.type === "message_stop") {
+              finish();
+            }
+          }
+        }
+        finish();
+      } catch {
+        finish();
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}

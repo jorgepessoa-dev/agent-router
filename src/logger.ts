@@ -36,8 +36,8 @@ export function estimateCost(
 
 /** Best-effort token usage extraction from a captured (SSE or JSON) response. */
 export function extractUsage(responseText: string): { input?: number; output?: number } {
-  const inputs = [...responseText.matchAll(/"input_tokens":\s*(\d+)/g)];
-  const outputs = [...responseText.matchAll(/"output_tokens":\s*(\d+)/g)];
+  const inputs = [...responseText.matchAll(/"(?:input_tokens|prompt_tokens)":\s*(\d+)/g)];
+  const outputs = [...responseText.matchAll(/"(?:output_tokens|completion_tokens)":\s*(\d+)/g)];
   const lastInput = inputs.at(-1);
   const lastOutput = outputs.at(-1);
   return {

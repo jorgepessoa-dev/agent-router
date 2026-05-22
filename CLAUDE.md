@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Objective
+
+This router exists to **split work by cost**. Route the bulk of coding work to
+a cheap model (MiniMax-M2.7); reserve the subscription's expensive
+reasoning/orchestration models (e.g. Claude Opus, Codex's GPT-5.x) for the hard
+turns. The setup works the same on WSL and native Windows, and serves both
+Claude Code (`POST /v1/messages`) and the Codex CLI (`POST /v1/chat/completions`).
+
+- Routine, high-volume work → routed to MiniMax (cheap).
+- Reasoning and orchestration → the Claude/Codex subscription's top model, used
+  directly (not through the router).
+
 ## Commands
 
 - `npm start` — run the router on `http://localhost:8787` (`tsx src/index.ts`)

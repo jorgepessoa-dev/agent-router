@@ -58,6 +58,10 @@ scripts\cc.ps1           # Windows (PowerShell) — native-Windows equivalent
 
 Inside Claude Code, use `/model` as normal — every tier routes to MiniMax.
 
+OpenAI-format clients (e.g. the Codex CLI) can point at `POST
+/v1/chat/completions`; the router translates to and from the Anthropic API.
+See `GUIA.md` for the Codex setup.
+
 ## Dashboard
 
 With the router running, open <http://localhost:8787/> for a live cost

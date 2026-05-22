@@ -2,8 +2,9 @@
   "name": "claudecode-router",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
-  "description": "Transparent router for Claude Code: routes requests across MiniMax, Haiku and Opus.",
+  "description": "Transparent router for Claude Code and the Codex CLI: routes coding work to a cheaper model (MiniMax).",
   "engines": {
     "node": ">=20"
   },

@@ -29,6 +29,9 @@ export interface RoutingConfig {
 
 export interface Config {
   port: number;
+  /** Bind address. Defaults to 127.0.0.1 (localhost only); the router has no
+   * inbound auth, so only set "0.0.0.0" if a client must reach it over a network. */
+  host?: string;
   providers: Record<string, ProviderConfig>;
   routing: RoutingConfig;
   /** Reference rates (e.g. Sonnet) used to estimate savings on the dashboard. */

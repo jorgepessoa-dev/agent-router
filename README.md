@@ -23,7 +23,8 @@ Two layers, no LLM call on the hot path:
    `ANTHROPIC_DEFAULT_*_MODEL` / `ANTHROPIC_SMALL_FAST_MODEL` env vars (set to
    `route-*` sentinels by `scripts/cc.sh`). The router reads the request's
    `model` field and maps it to a provider. Plan mode (detected via the
-   `ExitPlanMode` tool) escalates to Opus.
+   `ExitPlanMode` tool) can escalate to the `opus` tier — a config toggle
+   (`routing.planModeToOpus`), off in the shipped config.
 2. **Classifier** *(optional — disabled in the shipped config)* — for the
    `sonnet` execution tier, a Haiku call can decide `simple` vs `complex` to
    escalate hard turns to Opus. It runs **once per user turn** and the verdict
@@ -43,8 +44,9 @@ Each provider has a `format`:
 ## Setup
 
 1. Install dev dependencies: `npm install`
-2. Copy `.env.example` to `.env` and fill in `MINIMAX_API_KEY` and
-   `ANTHROPIC_API_KEY` (and `OPENROUTER_API_KEY` if you route to OpenRouter).
+2. Copy `.env.example` to `.env` and fill in `MINIMAX_API_KEY`. The shipped
+   all-MiniMax config needs no other key — only add `ANTHROPIC_API_KEY` or
+   `OPENROUTER_API_KEY` if you repoint a tier to those providers.
 3. Review `config.json` — providers, tier mapping, and **`pricing`** /
    **`baselinePricing`** (the per-million-token rates are illustrative; set
    your real rates so the cost estimates are accurate).
@@ -90,3 +92,6 @@ CI runs `typecheck` and `test` on every push and pull request
 - `routing.classifier` — enable/disable the Haiku escalation classifier
   (disabled in the shipped config).
 - `baselinePricing` — reference rates for the dashboard's savings estimate.
+- `port` / `host` — the router binds `host` (default `127.0.0.1`, localhost
+  only) on `port`. It has **no inbound authentication**, so only set `host` to
+  `0.0.0.0` if a client genuinely must reach it across a network.

@@ -80,6 +80,11 @@ A escolha real é **qual comando usas para arrancar** (ponto 1) — não o `/mod
 - Numa sessão `claude` normal: o `/model` escolhe o modelo Claude real
   (Haiku / Sonnet / Opus).
 
+**Importante:** numa sessão routed, o `/model` **não** te dá o modelo caro.
+`/model opus` (Claude) ou `/model gpt-5.x` (Codex) dentro de uma sessão routed
+continuam a ir para o MiniMax. Para o modelo caro da subscrição, **arranca sem
+router** (`claude` ou Codex normais) — só aí o `/model` escolhe o modelo real.
+
 Resumo: queres MiniMax → `cc.sh`. Queres Claude real → `claude` e depois
 `/model`.
 

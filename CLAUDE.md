@@ -28,10 +28,11 @@ the router at mock upstreams for integration testing.
 
 ## What this is
 
-An HTTP proxy that sits between Claude Code and LLM providers. Claude Code is
+An HTTP proxy that sits between coding agents and LLM providers. Claude Code is
 pointed at it via `ANTHROPIC_BASE_URL` (see `scripts/cc.sh`), so routing is
 invisible to the user. It speaks the Anthropic Messages API on `POST
-/v1/messages` and routes each request to a cheaper provider.
+/v1/messages` and the OpenAI Chat Completions API on `POST /v1/chat/completions`
+(for the Codex CLI), routing each request to a cheaper provider.
 
 ## Architecture
 
@@ -58,8 +59,10 @@ Request flow: `index.ts` → `server.ts` `handle()` → `router.ts` `decideRoute
   and tool calls.
 
 Key invariant: `providers.ts` `forward()` **always returns Anthropic-format
-output** (`ForwardResult`), so `server.ts` is format-agnostic — it just streams
-whatever body it gets and taps the bytes for token usage.
+output** (`ForwardResult`). For `POST /v1/messages` `server.ts` streams that
+body straight through; for `POST /v1/chat/completions` (OpenAI clients such as
+the Codex CLI) it translates the request in and the response back out via
+`translate.ts`. Either way it taps the streamed bytes for token usage.
 
 `stats.ts` accumulates per-provider request/token/cost totals in memory;
 `server.ts` exposes them at `GET /stats` and renders `dashboard.ts` HTML at
@@ -67,10 +70,11 @@ whatever body it gets and taps the bytes for token usage.
 
 ## Riskiest code
 
-`openaiStreamToAnthropic()` in `translate.ts` is a state machine that
-reconstructs the full Anthropic SSE event sequence (`message_start` →
-`content_block_*` → `message_delta` → `message_stop`) from OpenAI delta chunks.
-Changes here need the streaming tests in `test/translate.test.ts`.
+`translate.ts` has two SSE state machines: `openaiStreamToAnthropic()`
+reconstructs the Anthropic event sequence (`message_start` → `content_block_*`
+→ `message_delta` → `message_stop`) from OpenAI delta chunks, and
+`anthropicStreamToOpenAI()` does the inverse for OpenAI clients. Both are
+fiddly; changes here need the streaming tests in `test/translate.test.ts`.
 
 ## Config
 
